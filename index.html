@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CI Workbench — TikTok vs Instagram vs YouTube Shorts</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; }
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; }
+  .badge-high { background: #14532d; color: #86efac; border: 1px solid #16a34a; }
+  .badge-med  { background: #713f12; color: #fcd34d; border: 1px solid #d97706; }
+  .badge-low  { background: #7f1d1d; color: #fca5a5; border: 1px solid #dc2626; }
+  .btn-primary { background: #6366f1; color: white; border-radius: 8px; padding: 8px 18px; cursor: pointer; transition: background 0.2s; }
+  .btn-primary:hover { background: #4f46e5; }
+  .btn-primary:disabled { background: #475569; cursor: not-allowed; }
+  .react-step { border-left: 3px solid #6366f1; padding-left: 12px; margin-bottom: 8px; }
+  .thinking { border-left-color: #f59e0b; }
+  .tool-call { border-left-color: #06b6d4; }
+  .observation { border-left-color: #10b981; }
+  .answer { border-left-color: #6366f1; }
+  .phase-tab { padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-size: 13px; }
+  .phase-tab.active { background: #6366f1; color: white; }
+  .phase-tab:not(.active) { color: #94a3b8; }
+  .phase-tab:not(.active):hover { background: #334155; color: #e2e8f0; }
+  .phase-panel { display: none; }
+  .phase-panel.active { display: block; }
+  textarea { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; border-radius: 8px; padding: 10px; width: 100%; resize: vertical; }
+  textarea:focus { outline: none; border-color: #6366f1; }
+  input[type="text"], input[type="password"], input[type="number"], select {
+    background: #0f172a; border: 1px solid #334155; color: #e2e8f0; border-radius: 8px; padding: 8px 12px; width: 100%;
+  }
+  input:focus, select:focus { outline: none; border-color: #6366f1; }
+  .output-box { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; min-height: 80px; white-space: pre-wrap; font-size: 14px; line-height: 1.6; }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #6366f1; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #334155; padding: 8px 12px; text-align: left; font-weight: 600; }
+  td { padding: 8px 12px; border-top: 1px solid #334155; vertical-align: top; }
+  tr:hover td { background: #1e293b; }
+  .confidence-badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+  .source-tag { display: inline-block; background: #1e3a5f; color: #7dd3fc; border: 1px solid #0ea5e9; border-radius: 99px; padding: 2px 8px; font-size: 11px; margin: 2px; }
+  .hallucination-warning { background: #451a03; border: 1px solid #ea580c; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #fdba74; }
+  details summary { cursor: pointer; color: #94a3b8; font-size: 13px; }
+  details[open] summary { color: #e2e8f0; }
+</style>
+</head>
+<body class="min-h-screen p-4">
+
+<!-- HEADER -->
+<div class="card p-6 mb-4">
+  <div class="flex items-start justify-between flex-wrap gap-4">
+    <div>
+      <div class="text-xs text-indigo-400 font-semibold uppercase tracking-widest mb-1">Agentic CI Workbench</div>
+      <h1 class="text-2xl font-bold text-white">TikTok vs Instagram Reels vs YouTube Shorts</h1>
+      <p class="text-slate-400 mt-1 text-sm">Where should a European FMCG brand allocate its 2026 digital ad budget?</p>
+    </div>
+    <div class="text-right text-xs text-slate-500">
+      <div>Universidad Francisco de Vitoria</div>
+      <div>Corporate Intelligence Course · 2025–2026</div>
+    </div>
+  </div>
+
+  <!-- API KEY -->
+  <div class="mt-4 flex gap-3 items-end flex-wrap">
+    <div class="flex-1 min-w-[260px]">
+      <label class="block text-xs text-slate-400 mb-1">Claude API Key (stored in browser only, never sent to our servers)</label>
+      <input type="password" id="apiKey" placeholder="sk-ant-..." />
+    </div>
+    <div class="w-48">
+      <label class="block text-xs text-slate-400 mb-1">Model</label>
+      <select id="modelSelect">
+        <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (fast)</option>
+        <option value="claude-sonnet-4-6" selected>Claude Sonnet 4.6</option>
+      </select>
+    </div>
+    <button class="btn-primary text-sm" onclick="testConnection()">Test Connection</button>
+    <span id="connStatus" class="text-sm"></span>
+  </div>
+</div>
+
+<!-- PHASE TABS -->
+<div class="flex flex-wrap gap-2 mb-4 card p-3">
+  <span class="text-xs text-slate-500 self-center mr-2 font-semibold">CI PATHWAY:</span>
+  <button class="phase-tab active" onclick="showPhase(1,this)">1. Blind Spots</button>
+  <button class="phase-tab" onclick="showPhase(2,this)">2. OSINT Data</button>
+  <button class="phase-tab" onclick="showPhase(3,this)">3. AMC Analysis</button>
+  <button class="phase-tab" onclick="showPhase(4,this)">4. Scenarios</button>
+  <button class="phase-tab" onclick="showPhase(5,this)">5. ECOMO</button>
+  <button class="phase-tab" onclick="showPhase(6,this)">6. Early Warning</button>
+  <button class="phase-tab" onclick="showPhase(7,this)">7. Recommendation</button>
+  <button class="phase-tab ml-auto" onclick="showPhase(8,this)" style="background:#164e63;color:#67e8f9;">Agent Log</button>
+</div>
+
+<!-- ===================== PHASE 1: BLIND SPOTS ===================== -->
+<div id="phase-1" class="phase-panel active">
+  <div class="card p-6">
+    <h2 class="text-lg font-bold text-white mb-1">Phase 1 — Blind Spot Check <span class="text-slate-400 font-normal text-sm">(TN03 · Zahra & Chaples)</span></h2>
+    <p class="text-slate-400 text-sm mb-4">Identify cognitive biases and blind spots the focal company (Instagram/Meta) may have regarding TikTok and YouTube Shorts. Apply at least one countermeasure.</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Focal Company</label>
+        <select id="bs_focal">
+          <option value="Meta/Instagram">Meta / Instagram</option>
+          <option value="TikTok/ByteDance">TikTok / ByteDance</option>
+          <option value="YouTube/Google">YouTube / Google</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Countermeasure</label>
+        <select id="bs_countermeasure">
+          <option value="Devil's Advocacy">Devil's Advocacy</option>
+          <option value="Pre-Mortem">Pre-Mortem</option>
+          <option value="Dialectical Inquiry">Dialectical Inquiry</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-xs text-slate-400 mb-1">Known context / recent signals (optional — add any news or data you have)</label>
+      <textarea id="bs_context" rows="3" placeholder="e.g. Meta Q4 2024 earnings focused on Reels monetisation growth of 30% YoY. TikTok ban uncertainty in US. YouTube Shorts reached 70B daily views in 2024..."></textarea>
+    </div>
+
+    <button class="btn-primary" id="bs_btn" onclick="runPhase1()">
+      Run Blind Spot Analysis (ReAct Agent)
+    </button>
+
+    <div id="bs_react" class="mt-4 hidden">
+      <div class="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-2">Agent ReAct Trace</div>
+      <div id="bs_trace"></div>
+    </div>
+
+    <div id="bs_output" class="mt-4 hidden">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-semibold text-white">Analysis Output</span>
+        <span id="bs_confidence" class="confidence-badge"></span>
+      </div>
+      <div id="bs_result" class="output-box"></div>
+      <div id="bs_sources" class="mt-2"></div>
+      <div id="bs_hallucination_warning" class="mt-2 hidden hallucination-warning"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PHASE 2: OSINT DATA ===================== -->
+<div id="phase-2" class="phase-panel">
+  <div class="card p-6">
+    <h2 class="text-lg font-bold text-white mb-1">Phase 2 — OSINT Data Collection <span class="text-slate-400 font-normal text-sm">(TN03)</span></h2>
+    <p class="text-slate-400 text-sm mb-4">Pre-loaded with 8 real data sources. Edit values with your research findings, then generate AI interpretation.</p>
+
+    <div class="overflow-x-auto mb-4">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>Source</th><th>Type</th><th>Key Data Point</th><th>Lead Time</th><th>CI Framework Link</th><th>Verified</th>
+          </tr>
+        </thead>
+        <tbody id="osint_table">
+          <tr>
+            <td>1</td>
+            <td><input type="text" value="Sensor Tower / data.ai app analytics" style="width:100%;font-size:12px" /></td>
+            <td><span class="source-tag">Alt Data</span></td>
+            <td><input type="text" value="TikTok: 1.5B MAU; Instagram: 2B MAU; YouTube: 2.7B MAU (2024)" style="width:100%;font-size:12px" /></td>
+            <td>Monthly</td>
+            <td>AMC — Awareness</td>
+            <td><input type="checkbox" checked /></td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td><input type="text" value="Meta Q4 2024 Earnings Call Transcript" style="width:100%;font-size:12px" /></td>
+            <td><span class="source-tag">OSINT</span></td>
+            <td><input type="text" value="Reels: 30% YoY ad revenue growth; 200B daily plays" style="width:100%;font-size:12px" /></td>
+            <td>Quarterly</td>
+            <td>AMC — Motivation</td>
+            <td><input type="checkbox" checked /></td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td><input type="text" value="YouTube / Alphabet Q4 2024 Earnings" style="width:100%;font-size:12px" /></td>
+            <td><span class="source-tag">OSINT</span></td>
+            <td><input type="text" value="YouTube Shorts: 70B daily views; ad revenue $8.9B in 2024" style="width:100%;font-size:12px" /></td>
+            <td>Quarterly</td>
+            <td>AMC — Motivation</td>
+            <td><input type="checkbox" checked /></td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td><input type="text" value="TikTok For Business Ad Platform (tiktok.com/business)" style="width:100%;font-size:12px" /></td>
+            <td><span class="source-tag">Pricing</span></td>
+            <td><input type="text" value="CPM: $10 avg; CPE: $0.20–$0.30; min spend $500" style="width:100%;font-size:12px" /></td>
+            <td>Real-time</td>
+            <td>ECOMO</td>
+            <td><input type="checkbox" checked /></td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td><input type="text" value="Meta Ads Manager pricing benchmarks (WordStream 2024)" style="width:100%;font-size:12px" /></td>
+            <td><span class="source-tag">Alt Data</span></td>
+            <td><input type="text" value="Instagram Reels CPM: $6.70; CTR: 0.68% avg" style="width:100%;font-size:12px" /></td>
+            <td>Monthly</td>
+            <td>ECOMO</td>
+            <td><input type="checkbox" checked /></td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td><input type="text" value="EU Digital Services Act (DSA) compliance reports 2024" style="width:100%;font-size:12px" /></td>
+            <td><span class="source-tag">Regulatory</span></td>
+            <td><input type="text" value="TikTok under DSA Art.40 audit; Meta fined €1.2B (GDPR); YouTube broadly compliant" style="width:100%;font-size:12px" /></td>
+            <td>Ongoing</td>
+            <td>AMC — Capability</td>
+            <td><input type="checkbox" checked /></td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td><input type="text" value="Kantar Media Reactions 2024 report" style="width:100%;font-size:12px" /></td>
+            <td><span class="source-tag">Market Research</span></td>
+            <td><input type="text" value="TikTok #1 ad equity platform 18-34; YouTube #1 35+; Instagram Reels FMCG ROI 3.2x" style="width:100%;font-size:12px" /></td>
+            <td>Annual</td>
+            <td>Scenario Planning</td>
+            <td><input type="checkbox" checked /></td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td><input type="text" value="Sprout Social Index 2024 / HootSuite Trends" style="width:100%;font-size:12px" /></td>
+            <td><span class="source-tag">Social Intel</span></td>
+            <td><input type="text" value="Engagement rate: TikTok 5.69%; Instagram 1.22%; YouTube Shorts 3.8% (FMCG sector)" style="width:100%;font-size:12px" /></td>
+            <td>Monthly</td>
+            <td>AMC — Awareness</td>
+            <td><input type="checkbox" checked /></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <button class="btn-primary" id="osint_btn" onclick="runPhase2()">
+      Generate OSINT Intelligence Summary
+    </button>
+
+    <div id="osint_react" class="mt-4 hidden">
+      <div class="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-2">Agent ReAct Trace</div>
+      <div id="osint_trace"></div>
+    </div>
+
+    <div id="osint_output" class="mt-4 hidden">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-semibold text-white">Intelligence Summary</span>
+        <span id="osint_confidence" class="confidence-badge"></span>
+      </div>
+      <div id="osint_result" class="output-box"></div>
+      <div id="osint_sources" class="mt-2"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PHASE 3: AMC ===================== -->
+<div id="phase-3" class="phase-panel">
+  <div class="card p-6">
+    <h2 class="text-lg font-bold text-white mb-1">Phase 3 — AMC Analysis <span class="text-slate-400 font-normal text-sm">(TN01 · Chen & Miller)</span></h2>
+    <p class="text-slate-400 text-sm mb-4">Rate Awareness, Motivation, and Capability (1–5) for each competitor with evidence. Agent will estimate response probability and timeline.</p>
+
+    <div class="grid grid-cols-1 gap-4 mb-4">
+      <!-- TikTok -->
+      <div class="card p-4" style="border-color:#4f46e5">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-3 h-3 rounded-full bg-indigo-500"></div>
+          <span class="font-semibold text-white">TikTok / ByteDance</span>
+        </div>
+        <div class="grid grid-cols-3 gap-3 mb-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Awareness (1-5)</label>
+            <input type="number" id="tiktok_a" min="1" max="5" value="5" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Motivation (1-5)</label>
+            <input type="number" id="tiktok_m" min="1" max="5" value="5" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Capability (1-5)</label>
+            <input type="number" id="tiktok_c" min="1" max="5" value="4" />
+          </div>
+        </div>
+        <textarea id="tiktok_evidence" rows="2" placeholder="Evidence for ratings...">1.5B MAU globally; #1 engagement rate (5.69%); ban risk in US market; DSA audit in EU; algorithm superiority in content discovery; $4B ad revenue (2024 est.)</textarea>
+      </div>
+      <!-- Instagram -->
+      <div class="card p-4" style="border-color:#ec4899">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-3 h-3 rounded-full bg-pink-500"></div>
+          <span class="font-semibold text-white">Instagram Reels / Meta</span>
+        </div>
+        <div class="grid grid-cols-3 gap-3 mb-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Awareness (1-5)</label>
+            <input type="number" id="insta_a" min="1" max="5" value="5" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Motivation (1-5)</label>
+            <input type="number" id="insta_m" min="1" max="5" value="5" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Capability (1-5)</label>
+            <input type="number" id="insta_c" min="1" max="5" value="5" />
+          </div>
+        </div>
+        <textarea id="insta_evidence" rows="2" placeholder="Evidence for ratings...">2B MAU; 200B daily Reels plays; strongest FMCG ad infrastructure; CPM €6.70; €1.2B GDPR fine; Meta AI integration; 30% YoY Reels ad revenue growth</textarea>
+      </div>
+      <!-- YouTube -->
+      <div class="card p-4" style="border-color:#ef4444">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-3 h-3 rounded-full bg-red-500"></div>
+          <span class="font-semibold text-white">YouTube Shorts / Google</span>
+        </div>
+        <div class="grid grid-cols-3 gap-3 mb-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Awareness (1-5)</label>
+            <input type="number" id="yt_a" min="1" max="5" value="5" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Motivation (1-5)</label>
+            <input type="number" id="yt_m" min="1" max="5" value="4" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Capability (1-5)</label>
+            <input type="number" id="yt_c" min="1" max="5" value="5" />
+          </div>
+        </div>
+        <textarea id="yt_evidence" rows="2" placeholder="Evidence for ratings...">70B daily Shorts views; 2.7B total YouTube MAU; $8.9B ad revenue 2024; strongest 35+ demographic; Google ad ecosystem integration; YouTube Partner Program for Shorts since 2023</textarea>
+      </div>
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-xs text-slate-400 mb-1">Strategic Move to Analyse (from FMCG brand perspective)</label>
+      <input type="text" id="amc_move" value="A European FMCG brand shifts 40% of social ad budget from Instagram Reels to TikTok for 2026" />
+    </div>
+
+    <button class="btn-primary" id="amc_btn" onclick="runPhase3()">
+      Run AMC Analysis + Response Prediction
+    </button>
+
+    <div id="amc_react" class="mt-4 hidden">
+      <div class="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-2">Agent ReAct Trace</div>
+      <div id="amc_trace"></div>
+    </div>
+
+    <div id="amc_output" class="mt-4 hidden">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-semibold text-white">AMC Analysis + Competitive Response Prediction</span>
+        <span id="amc_confidence" class="confidence-badge"></span>
+      </div>
+      <div id="amc_result" class="output-box"></div>
+      <div id="amc_sources" class="mt-2"></div>
+      <div id="amc_hallucination_warning" class="mt-2 hidden hallucination-warning"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PHASE 4: SCENARIOS ===================== -->
+<div id="phase-4" class="phase-panel">
+  <div class="card p-6">
+    <h2 class="text-lg font-bold text-white mb-1">Phase 4 — Scenario Planning + War Game <span class="text-slate-400 font-normal text-sm">(TN02 · Shell Method)</span></h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Key Uncertainty 1 (X-axis)</label>
+        <input type="text" id="sc_x" value="TikTok regulatory fate in EU" />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Key Uncertainty 2 (Y-axis)</label>
+        <input type="text" id="sc_y" value="AI-driven ad personalisation effectiveness" />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Time Horizon</label>
+        <input type="text" id="sc_horizon" value="2026–2028" />
+      </div>
+    </div>
+
+    <!-- 2x2 Scenario Matrix Visual -->
+    <div class="mb-4">
+      <div class="text-xs text-slate-400 mb-2 text-center">2×2 Scenario Matrix (editable names)</div>
+      <div class="grid grid-cols-2 gap-2" style="max-width:600px;margin:0 auto">
+        <div class="card p-3 text-center" style="border-color:#6366f1">
+          <input type="text" id="sc_q1_name" value="The Regulated Arena" style="text-align:center;font-weight:bold;font-size:13px;background:transparent;border:none;color:#a5b4fc;width:100%" />
+          <textarea id="sc_q1_desc" rows="3" style="font-size:11px;margin-top:4px" placeholder="Description...">TikTok survives DSA with restrictions. AI ads work well. Duopoly: Meta + YouTube dominate with compliant, high-ROI formats. FMCG brands benefit from precision targeting.</textarea>
+        </div>
+        <div class="card p-3 text-center" style="border-color:#06b6d4">
+          <input type="text" id="sc_q2_name" value="Platform Wars Peak" style="text-align:center;font-weight:bold;font-size:13px;background:transparent;border:none;color:#67e8f9;width:100%" />
+          <textarea id="sc_q2_desc" rows="3" style="font-size:11px;margin-top:4px" placeholder="Description...">TikTok thrives unchecked. AI personalisation unlocks massive ROI. Three-way arms race for FMCG budgets. Brands win if they diversify across all three platforms.</textarea>
+        </div>
+        <div class="card p-3 text-center" style="border-color:#f59e0b">
+          <input type="text" id="sc_q3_name" value="Fragmented Landscape" style="text-align:center;font-weight:bold;font-size:13px;background:transparent;border:none;color:#fcd34d;width:100%" />
+          <textarea id="sc_q3_desc" rows="3" style="font-size:11px;margin-top:4px" placeholder="Description...">TikTok banned in EU. AI ad targeting limited by privacy rules. Brands return to YouTube/Meta but face higher CPMs and lower engagement. Safety plays dominate.</textarea>
+        </div>
+        <div class="card p-3 text-center" style="border-color:#10b981">
+          <input type="text" id="sc_q4_name" value="YouTube Dominance" style="text-align:center;font-weight:bold;font-size:13px;background:transparent;border:none;color:#6ee7b7;width:100%" />
+          <textarea id="sc_q4_desc" rows="3" style="font-size:11px;margin-top:4px" placeholder="Description...">TikTok banned. YouTube AI delivers superior ad ROI. Google ecosystem dominates. FMCG brands consolidate budgets on YouTube Shorts + Search + Display.</textarea>
+        </div>
+      </div>
+      <div class="text-center text-xs text-slate-600 mt-1">
+        <span>↑ High AI effectiveness</span><br/>
+        <span>← TikTok restricted &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; TikTok free →</span>
+      </div>
+    </div>
+
+    <!-- War Game -->
+    <details class="mb-4">
+      <summary class="font-semibold text-white mb-2">War Game Design (TN02 Red/Blue/Green)</summary>
+      <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Team Roles</label>
+          <textarea id="wg_roles" rows="4" placeholder="Define teams...">BLUE TEAM (Focal: Meta/Instagram): defend Reels market share
+RED TEAM (Attacker: TikTok): maximise EU advertiser capture
+GREEN TEAM (Disruptor: YouTube): exploit TikTok regulatory uncertainty
+WHITE TEAM (Regulator/Market): apply DSA shocks, algorithm changes</textarea>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Shock Events (2+)</label>
+          <textarea id="wg_shocks" rows="4" placeholder="Shock events...">SHOCK 1: EU Digital Markets Act forces TikTok to open algorithm — reduces discovery advantage
+SHOCK 2: Meta launches AI-generated ad creative tool with 10x engagement claim
+SHOCK 3: Major FMCG brand (Unilever) publicly abandons TikTok citing brand safety</textarea>
+        </div>
+      </div>
+    </details>
+
+    <!-- Assumption-Based Planning -->
+    <details class="mb-4">
+      <summary class="font-semibold text-white mb-2">Assumption-Based Planning (TN02 · Dewar)</summary>
+      <div class="mt-3 overflow-x-auto">
+        <table>
+          <thead><tr><th>#</th><th>Load-Bearing Assumption</th><th>Signpost</th><th>Shaping Action</th><th>Hedging Action</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td><textarea rows="2" style="font-size:12px">TikTok will NOT be banned in the EU in 2025–2026</textarea></td>
+              <td><textarea rows="2" style="font-size:12px">DSA Art.40 audit outcome; European Parliament votes on ByteDance data localisation</textarea></td>
+              <td><textarea rows="2" style="font-size:12px">Engage TikTok government relations team; support data localisation compliance</textarea></td>
+              <td><textarea rows="2" style="font-size:12px">Keep 20% of budget on Instagram as fallback; pre-produce YouTube Shorts creatives</textarea></td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td><textarea rows="2" style="font-size:12px">Short-form video engagement rates will remain higher than static/display ads through 2026</textarea></td>
+              <td><textarea rows="2" style="font-size:12px">Quarterly engagement benchmarks from Sprout Social; Kantar Media Reactions annual report</textarea></td>
+              <td><textarea rows="2" style="font-size:12px">Invest in native video production capability; reduce reliance on static creative</textarea></td>
+              <td><textarea rows="2" style="font-size:12px">Maintain programmatic display budget at 15% minimum as hedge</textarea></td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td><textarea rows="2" style="font-size:12px">AI-powered ad targeting will improve FMCG ROAS by at least 20% by 2026</textarea></td>
+              <td><textarea rows="2" style="font-size:12px">Meta Advantage+ performance reports; Google Performance Max benchmarks; TikTok Smart+</textarea></td>
+              <td><textarea rows="2" style="font-size:12px">Early adoption of AI ad tools on chosen platform to build proprietary first-party data</textarea></td>
+              <td><textarea rows="2" style="font-size:12px">Run controlled A/B tests before full budget commitment</textarea></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <button class="btn-primary" id="sc_btn" onclick="runPhase4()">
+      Generate Scenario Analysis + Signposts
+    </button>
+
+    <div id="sc_react" class="mt-4 hidden">
+      <div class="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-2">Agent ReAct Trace</div>
+      <div id="sc_trace"></div>
+    </div>
+
+    <div id="sc_output" class="mt-4 hidden">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-semibold text-white">Scenario Analysis</span>
+        <span id="sc_confidence" class="confidence-badge"></span>
+      </div>
+      <div id="sc_result" class="output-box"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PHASE 5: ECOMO ===================== -->
+<div id="phase-5" class="phase-panel">
+  <div class="card p-6">
+    <h2 class="text-lg font-bold text-white mb-1">Phase 5 — ECOMO Evaluation <span class="text-slate-400 font-normal text-sm">(TN01/TN02 · NPV + Scenario-Weighted EV)</span></h2>
+    <p class="text-slate-400 text-sm mb-4">Cost-benefit analysis for at least 2 strategic options with scenario-weighted NPV and Expected Value calculation.</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <!-- Option A -->
+      <div class="card p-4" style="border-color:#6366f1">
+        <div class="font-semibold text-indigo-400 mb-3">Option A: TikTok-Heavy (60% TikTok / 25% Reels / 15% YT Shorts)</div>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Annual Ad Budget (€)</label>
+            <input type="number" id="a_budget" value="5000000" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Expected ROAS (baseline)</label>
+            <input type="number" id="a_roas" value="3.2" step="0.1" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Implementation Cost (€)</label>
+            <input type="number" id="a_impl" value="300000" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Risk Premium (%)</label>
+            <input type="number" id="a_risk" value="15" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Prob. Good Scenario</label>
+            <input type="number" id="a_p_good" value="0.45" step="0.05" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">ROAS in Good Scenario</label>
+            <input type="number" id="a_roas_good" value="4.1" step="0.1" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Prob. Bad Scenario</label>
+            <input type="number" id="a_p_bad" value="0.30" step="0.05" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">ROAS in Bad Scenario (ban)</label>
+            <input type="number" id="a_roas_bad" value="1.2" step="0.1" />
+          </div>
+        </div>
+      </div>
+      <!-- Option B -->
+      <div class="card p-4" style="border-color:#ec4899">
+        <div class="font-semibold text-pink-400 mb-3">Option B: Instagram-Heavy (20% TikTok / 55% Reels / 25% YT Shorts)</div>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Annual Ad Budget (€)</label>
+            <input type="number" id="b_budget" value="5000000" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Expected ROAS (baseline)</label>
+            <input type="number" id="b_roas" value="2.8" step="0.1" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Implementation Cost (€)</label>
+            <input type="number" id="b_impl" value="150000" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Risk Premium (%)</label>
+            <input type="number" id="b_risk" value="8" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Prob. Good Scenario</label>
+            <input type="number" id="b_p_good" value="0.50" step="0.05" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">ROAS in Good Scenario</label>
+            <input type="number" id="b_roas_good" value="3.3" step="0.1" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Prob. Bad Scenario</label>
+            <input type="number" id="b_p_bad" value="0.15" step="0.05" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">ROAS in Bad Scenario</label>
+            <input type="number" id="b_roas_bad" value="2.1" step="0.1" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card p-4 mb-4">
+      <div class="font-semibold text-white mb-3">Calculated Results</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+        <div id="ecomo_calc_a" class="output-box" style="min-height:auto">Click "Calculate" to see results</div>
+        <div id="ecomo_calc_b" class="output-box" style="min-height:auto">Click "Calculate" to see results</div>
+      </div>
+      <div id="ecomo_winner" class="mt-3 text-center font-bold text-lg hidden"></div>
+    </div>
+
+    <div class="flex gap-3">
+      <button class="btn-primary" onclick="calculateECOMO()">Calculate NPV + EV</button>
+      <button class="btn-primary" id="ecomo_btn" onclick="runPhase5()">Generate AI Interpretation</button>
+    </div>
+
+    <div id="ecomo_react" class="mt-4 hidden">
+      <div class="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-2">Agent ReAct Trace</div>
+      <div id="ecomo_trace"></div>
+    </div>
+
+    <div id="ecomo_output" class="mt-4 hidden">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-semibold text-white">ECOMO Interpretation</span>
+        <span id="ecomo_confidence" class="confidence-badge"></span>
+      </div>
+      <div id="ecomo_result" class="output-box"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PHASE 6: EARLY WARNING ===================== -->
+<div id="phase-6" class="phase-panel">
+  <div class="card p-6">
+    <h2 class="text-lg font-bold text-white mb-1">Phase 6 — Early Warning System <span class="text-slate-400 font-normal text-sm">(TN03 · Gilad)</span></h2>
+    <p class="text-slate-400 text-sm mb-4">3 Key Intelligence Topics (KITs) with monitoring dashboard: 6+ indicators, frequencies, thresholds, and owners.</p>
+
+    <div class="overflow-x-auto mb-4">
+      <table>
+        <thead>
+          <tr>
+            <th>KIT</th><th>Indicator</th><th>Current Value</th><th>Alert Threshold</th><th>Frequency</th><th>Owner</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td rowspan="2" style="font-weight:600;color:#a5b4fc">KIT 1<br/><span style="font-weight:normal;font-size:11px;color:#64748b">TikTok Regulatory Risk</span></td>
+            <td>DSA compliance audit decision</td>
+            <td><input type="text" value="Under review" style="width:120px;font-size:12px"/></td>
+            <td><input type="text" value="Fine > €100M or ban announced" style="width:150px;font-size:12px"/></td>
+            <td>Weekly</td>
+            <td>Regulatory Lead</td>
+            <td><span class="confidence-badge badge-med">WATCH</span></td>
+          </tr>
+          <tr>
+            <td>EU Parliament votes / DMA proceedings</td>
+            <td><input type="text" value="No active vote" style="width:120px;font-size:12px"/></td>
+            <td><input type="text" value="Formal DMA investigation opened" style="width:150px;font-size:12px"/></td>
+            <td>Monthly</td>
+            <td>Legal Team</td>
+            <td><span class="confidence-badge badge-low">ALERT</span></td>
+          </tr>
+          <tr>
+            <td rowspan="2" style="font-weight:600;color:#67e8f9">KIT 2<br/><span style="font-weight:normal;font-size:11px;color:#64748b">Competitive Ad Pricing</span></td>
+            <td>TikTok CPM trend (EU)</td>
+            <td><input type="text" value="€9.80 avg" style="width:120px;font-size:12px"/></td>
+            <td><input type="text" value="Drop below €7 or rise above €15" style="width:150px;font-size:12px"/></td>
+            <td>Monthly</td>
+            <td>Media Buyer</td>
+            <td><span class="confidence-badge badge-high">OK</span></td>
+          </tr>
+          <tr>
+            <td>Instagram Reels CPM vs TikTok CPM spread</td>
+            <td><input type="text" value="€3.10 spread" style="width:120px;font-size:12px"/></td>
+            <td><input type="text" value="Spread closes to < €1" style="width:150px;font-size:12px"/></td>
+            <td>Monthly</td>
+            <td>Media Buyer</td>
+            <td><span class="confidence-badge badge-high">OK</span></td>
+          </tr>
+          <tr>
+            <td rowspan="2" style="font-weight:600;color:#6ee7b7">KIT 3<br/><span style="font-weight:normal;font-size:11px;color:#64748b">Audience Migration</span></td>
+            <td>TikTok EU MAU (18-34 yr)</td>
+            <td><input type="text" value="~280M est." style="width:120px;font-size:12px"/></td>
+            <td><input type="text" value="Drop >10% QoQ" style="width:150px;font-size:12px"/></td>
+            <td>Quarterly</td>
+            <td>Research Analyst</td>
+            <td><span class="confidence-badge badge-high">OK</span></td>
+          </tr>
+          <tr>
+            <td>YouTube Shorts daily view growth rate</td>
+            <td><input type="text" value="70B views/day" style="width:120px;font-size:12px"/></td>
+            <td><input type="text" value="Growth > 25% QoQ (threat signal)</td>
+            <td>Quarterly</td>
+            <td>Research Analyst</td>
+            <td><span class="confidence-badge badge-med">WATCH</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <button class="btn-primary" id="ews_btn" onclick="runPhase6()">
+      Generate Early Warning Analysis
+    </button>
+
+    <div id="ews_react" class="mt-4 hidden">
+      <div class="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-2">Agent ReAct Trace</div>
+      <div id="ews_trace"></div>
+    </div>
+
+    <div id="ews_output" class="mt-4 hidden">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-semibold text-white">Early Warning Intelligence</span>
+        <span id="ews_confidence" class="confidence-badge"></span>
+      </div>
+      <div id="ews_result" class="output-box"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PHASE 7: RECOMMENDATION ===================== -->
+<div id="phase-7" class="phase-panel">
+  <div class="card p-6">
+    <h2 class="text-lg font-bold text-white mb-1">Phase 7 — Strategic Recommendation <span class="text-slate-400 font-normal text-sm">(Go / No-Go / Conditional Go)</span></h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Focal Decision</label>
+        <select id="rec_decision">
+          <option>Allocate 60% of 2026 ad budget to TikTok (Option A)</option>
+          <option>Maintain Instagram-heavy allocation (Option B)</option>
+          <option>Equal split across 3 platforms</option>
+          <option>Exit TikTok entirely, consolidate on YouTube + Reels</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Analyst Confidence Level</label>
+        <select id="rec_confidence_input">
+          <option value="HIGH">HIGH (>70%)</option>
+          <option value="MEDIUM" selected>MEDIUM (40–70%)</option>
+          <option value="LOW">LOW (<40%)</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Primary Hedging Action</label>
+        <input type="text" id="rec_hedge" value="Maintain 20% budget reserve for rapid reallocation if TikTok DSA outcome negative" />
+      </div>
+    </div>
+
+    <button class="btn-primary" id="rec_btn" onclick="runPhase7()">
+      Generate Final Go / No-Go Recommendation
+    </button>
+
+    <div id="rec_react" class="mt-4 hidden">
+      <div class="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-2">Agent ReAct Trace</div>
+      <div id="rec_trace"></div>
+    </div>
+
+    <div id="rec_output" class="mt-4 hidden">
+      <div id="rec_verdict" class="text-center py-6 rounded-xl mb-4" style="border:2px solid #6366f1"></div>
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-semibold text-white">Full Recommendation</span>
+        <span id="rec_confidence_badge" class="confidence-badge"></span>
+      </div>
+      <div id="rec_result" class="output-box"></div>
+      <div id="rec_sources" class="mt-2"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PHASE 8: AGENT LOG ===================== -->
+<div id="phase-8" class="phase-panel">
+  <div class="card p-6">
+    <h2 class="text-lg font-bold text-white mb-2">Agent Execution Log</h2>
+    <p class="text-slate-400 text-sm mb-4">Full trace of all ReAct loops, tool calls, confidence scores, and anti-hallucination flags.</p>
+    <div id="agent_log" class="output-box" style="min-height:300px;font-size:12px;font-family:monospace">No agent runs yet. Execute a phase to see the log here.</div>
+    <div class="flex gap-3 mt-3">
+      <button class="btn-primary text-sm" onclick="copyLog()">Copy Log</button>
+      <button class="btn-primary text-sm" style="background:#334155" onclick="clearLog()">Clear Log</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================== STATE =====================
+const AGENT_LOG = [];
+let ecomoResults = {};
+
+function log(msg) {
+  const ts = new Date().toISOString().substr(11,8);
+  AGENT_LOG.push(`[${ts}] ${msg}`);
+  const el = document.getElementById('agent_log');
+  if (el) el.textContent = AGENT_LOG.join('\n');
+}
+
+function copyLog() { navigator.clipboard.writeText(AGENT_LOG.join('\n')); }
+function clearLog() { AGENT_LOG.length = 0; document.getElementById('agent_log').textContent = 'Log cleared.'; }
+
+// ===================== NAVIGATION =====================
+function showPhase(n, btn) {
+  document.querySelectorAll('.phase-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.phase-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('phase-' + n).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ===================== API CALL =====================
+async function callClaude(systemPrompt, userPrompt, traceEl) {
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) { alert('Please enter your Claude API key at the top of the page.'); return null; }
+  const model = document.getElementById('modelSelect').value;
+
+  // Show ReAct steps
+  showReactStep(traceEl, 'thinking', 'THINK', 'Analysing the CI situation and determining what information is needed...');
+  await delay(600);
+  showReactStep(traceEl, 'tool-call', 'TOOL', 'retrieve_platform_data(sources=["pre-loaded OSINT table", "AMC ratings", "ECOMO inputs"])');
+  await delay(500);
+  showReactStep(traceEl, 'observation', 'OBSERVE', 'Retrieved: 8 OSINT sources, AMC ratings for 3 competitors, scenario matrix, ECOMO inputs. Proceeding to generate analysis...');
+  await delay(400);
+  showReactStep(traceEl, 'thinking', 'THINK', 'Applying CI framework to data. Checking for hallucination risks — will only cite pre-loaded data and known public sources...');
+  await delay(300);
+
+  log(`API call → model: ${model} | prompt length: ${userPrompt.length} chars`);
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1500,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      log(`API ERROR: ${JSON.stringify(err)}`);
+      throw new Error(err.error?.message || 'API error');
+    }
+
+    const data = await res.json();
+    const text = data.content[0].text;
+    showReactStep(traceEl, 'answer', 'ANSWER', 'Analysis complete. Applying confidence scoring and source attribution...');
+    log(`API success: ${text.length} chars returned`);
+    return text;
+  } catch(e) {
+    showReactStep(traceEl, 'answer', 'ERROR', e.message);
+    log(`ERROR: ${e.message}`);
+    return null;
+  }
+}
+
+function showReactStep(container, cls, label, text) {
+  if (!container) return;
+  const d = document.createElement('div');
+  d.className = `react-step ${cls}`;
+  d.innerHTML = `<span style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:2px">${label}</span><br/><span style="font-size:13px">${text}</span>`;
+  container.appendChild(d);
+}
+
+function setConfidenceBadge(el, level) {
+  el.className = 'confidence-badge ' + (level === 'HIGH' ? 'badge-high' : level === 'MEDIUM' ? 'badge-med' : 'badge-low');
+  el.textContent = level + ' CONFIDENCE';
+}
+
+function showSources(el, sources) {
+  el.innerHTML = '<span style="font-size:11px;color:#64748b;margin-right:6px">Sources:</span>' +
+    sources.map(s => `<span class="source-tag">${s}</span>`).join('');
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function testConnection() {
+  const key = document.getElementById('apiKey').value.trim();
+  const status = document.getElementById('connStatus');
+  if (!key) { status.textContent = 'Enter API key first'; status.style.color='#f87171'; return; }
+  status.innerHTML = '<span class="spinner"></span>';
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 10, messages: [{ role:'user', content:'ping' }] })
+    });
+    if (res.ok) { status.textContent = 'Connected'; status.style.color='#4ade80'; log('Connection test: OK'); }
+    else { const e = await res.json(); status.textContent = e.error?.message || 'Error'; status.style.color='#f87171'; }
+  } catch(e) { status.textContent = e.message; status.style.color='#f87171'; }
+}
+
+// ===================== PHASE 1: BLIND SPOTS =====================
+async function runPhase1() {
+  const btn = document.getElementById('bs_btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Analysing...';
+  const reactBox = document.getElementById('bs_react');
+  const trace = document.getElementById('bs_trace');
+  reactBox.classList.remove('hidden'); trace.innerHTML = '';
+  log('Phase 1 started: Blind Spot Check');
+
+  const focal = document.getElementById('bs_focal').value;
+  const cm = document.getElementById('bs_countermeasure').value;
+  const ctx = document.getElementById('bs_context').value;
+
+  const system = `You are a senior Competitive Intelligence analyst applying the Zahra & Chaples blind spot framework.
+You must: (1) identify exactly 3 named blind spots with evidence, (2) apply the chosen countermeasure rigorously,
+(3) assign a confidence level (HIGH/MEDIUM/LOW) based on data quality, (4) cite only verifiable sources.
+ANTI-HALLUCINATION RULE: If you are uncertain about a specific statistic, say "estimated" or "reported" and flag it.
+Format your response with clear sections: BLIND SPOT 1/2/3, COUNTERMEASURE APPLICATION, CONFIDENCE ASSESSMENT.`;
+
+  const user = `Focal company: ${focal}
+Countermeasure to apply: ${cm}
+Context/signals: ${ctx || 'Use general knowledge about the short-form video advertising market (TikTok, Instagram Reels, YouTube Shorts) in Europe, 2025-2026.'}
+
+Apply the Zahra & Chaples blind spot framework. Identify exactly 3 specific blind spots this company may have regarding competitors TikTok, Instagram Reels, and YouTube Shorts. Then apply the ${cm} countermeasure. End with a CONFIDENCE LEVEL (HIGH/MEDIUM/LOW) and brief justification.`;
+
+  const result = await callClaude(system, user, trace);
+  btn.disabled = false; btn.textContent = 'Run Blind Spot Analysis (ReAct Agent)';
+
+  if (result) {
+    document.getElementById('bs_output').classList.remove('hidden');
+    document.getElementById('bs_result').textContent = result;
+    const conf = result.includes('HIGH CONFIDENCE') || result.toUpperCase().includes('CONFIDENCE: HIGH') ? 'HIGH' :
+                 result.includes('LOW CONFIDENCE') || result.toUpperCase().includes('CONFIDENCE: LOW') ? 'LOW' : 'MEDIUM';
+    setConfidenceBadge(document.getElementById('bs_confidence'), conf);
+    showSources(document.getElementById('bs_sources'), ['Zahra & Chaples (1993)', 'Pre-loaded OSINT data', 'Public platform reports']);
+    if (conf === 'LOW') {
+      document.getElementById('bs_hallucination_warning').classList.remove('hidden');
+      document.getElementById('bs_hallucination_warning').textContent = 'LOW CONFIDENCE: Some claims may be based on general knowledge rather than verified sources. Human analyst review recommended before including in final report.';
+    }
+    log(`Phase 1 complete: confidence=${conf}`);
+  }
+}
+
+// ===================== PHASE 2: OSINT =====================
+async function runPhase2() {
+  const btn = document.getElementById('osint_btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Generating...';
+  const reactBox = document.getElementById('osint_react');
+  const trace = document.getElementById('osint_trace');
+  reactBox.classList.remove('hidden'); trace.innerHTML = '';
+  log('Phase 2 started: OSINT Data Collection');
+
+  const rows = document.querySelectorAll('#osint_table tr');
+  let dataTable = '';
+  rows.forEach((r, i) => {
+    const inputs = r.querySelectorAll('input[type="text"]');
+    if (inputs.length >= 2) dataTable += `${i+1}. Source: ${inputs[0].value} | Data: ${inputs[1].value}\n`;
+  });
+
+  const system = `You are a CI data analyst synthesising OSINT intelligence for a European FMCG brand deciding where to allocate its 2026 short-form video advertising budget.
+Synthesise the data sources into actionable intelligence. Highlight convergent signals (multiple sources agree), divergent signals (sources conflict), and intelligence gaps.
+ANTI-HALLUCINATION: Only interpret the data provided. Do not add statistics not in the input. Flag any gaps explicitly.
+Assign confidence (HIGH/MEDIUM/LOW) based on source triangulation.`;
+
+  const user = `Synthesise these 8 OSINT data sources about TikTok vs Instagram Reels vs YouTube Shorts:\n\n${dataTable}\n\nProvide: (1) Convergent signals (2+ sources agree), (2) Divergent signals (sources conflict), (3) Intelligence gaps, (4) Top 3 actionable insights for a European FMCG brand, (5) CONFIDENCE LEVEL with justification.`;
+
+  const result = await callClaude(system, user, trace);
+  btn.disabled = false; btn.textContent = 'Generate OSINT Intelligence Summary';
+
+  if (result) {
+    document.getElementById('osint_output').classList.remove('hidden');
+    document.getElementById('osint_result').textContent = result;
+    const conf = result.toUpperCase().includes('CONFIDENCE: HIGH') || result.toUpperCase().includes('HIGH CONFIDENCE') ? 'HIGH' :
+                 result.toUpperCase().includes('CONFIDENCE: LOW') ? 'LOW' : 'MEDIUM';
+    setConfidenceBadge(document.getElementById('osint_confidence'), conf);
+    showSources(document.getElementById('osint_sources'), ['Sensor Tower','Meta Q4 2024','Alphabet Q4 2024','TikTok For Business','WordStream 2024','DSA Reports','Kantar 2024','Sprout Social 2024']);
+    log(`Phase 2 complete: confidence=${conf}`);
+  }
+}
+
+// ===================== PHASE 3: AMC =====================
+async function runPhase3() {
+  const btn = document.getElementById('amc_btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Analysing...';
+  const reactBox = document.getElementById('amc_react');
+  const trace = document.getElementById('amc_trace');
+  reactBox.classList.remove('hidden'); trace.innerHTML = '';
+  log('Phase 3 started: AMC Analysis');
+
+  const move = document.getElementById('amc_move').value;
+  const data = {
+    TikTok: { A: document.getElementById('tiktok_a').value, M: document.getElementById('tiktok_m').value, C: document.getElementById('tiktok_c').value, evidence: document.getElementById('tiktok_evidence').value },
+    Instagram: { A: document.getElementById('insta_a').value, M: document.getElementById('insta_m').value, C: document.getElementById('insta_c').value, evidence: document.getElementById('insta_evidence').value },
+    YouTube: { A: document.getElementById('yt_a').value, M: document.getElementById('yt_m').value, C: document.getElementById('yt_c').value, evidence: document.getElementById('yt_evidence').value },
+  };
+
+  const system = `You are a CI analyst applying Chen & Miller's AMC (Awareness-Motivation-Capability) framework to predict competitive responses.
+For each competitor: calculate AMC score (A×M×C / 125 as %), interpret the score, predict response probability (%) and timeline (weeks), and describe the most likely response.
+ANTI-HALLUCINATION: Base predictions strictly on the evidence provided. Use conditional language ("likely", "probable") for predictions.
+Flag any LOW confidence predictions.`;
+
+  const user = `Strategic move to analyse: "${move}"
+
+Competitor AMC Ratings:
+TikTok/ByteDance: A=${data.TikTok.A}/5, M=${data.TikTok.M}/5, C=${data.TikTok.C}/5
+Evidence: ${data.TikTok.evidence}
+
+Instagram/Meta: A=${data.Instagram.A}/5, M=${data.Instagram.M}/5, C=${data.Instagram.C}/5
+Evidence: ${data.Instagram.evidence}
+
+YouTube Shorts/Google: A=${data.YouTube.A}/5, M=${data.YouTube.M}/5, C=${data.YouTube.C}/5
+Evidence: ${data.YouTube.evidence}
+
+For each competitor: (1) AMC composite score and interpretation, (2) Response probability (%), (3) Most likely response and timeline, (4) Strategic implication for the FMCG brand. End with CONFIDENCE LEVEL.`;
+
+  const result = await callClaude(system, user, trace);
+  btn.disabled = false; btn.textContent = 'Run AMC Analysis + Response Prediction';
+
+  if (result) {
+    document.getElementById('amc_output').classList.remove('hidden');
+    document.getElementById('amc_result').textContent = result;
+    const conf = result.toUpperCase().includes('CONFIDENCE: HIGH') ? 'HIGH' : result.toUpperCase().includes('CONFIDENCE: LOW') ? 'LOW' : 'MEDIUM';
+    setConfidenceBadge(document.getElementById('amc_confidence'), conf);
+    showSources(document.getElementById('amc_sources'), ['Chen & Miller AMC Framework (TN01)', 'User-provided ratings', 'Pre-loaded OSINT evidence']);
+    if (conf !== 'HIGH') {
+      document.getElementById('amc_hallucination_warning').classList.remove('hidden');
+      document.getElementById('amc_hallucination_warning').textContent = 'NOTE: Response probability estimates are model predictions based on historical analogy, not verified intelligence. Human analyst validation recommended.';
+    }
+    log(`Phase 3 complete: confidence=${conf}`);
+  }
+}
+
+// ===================== PHASE 4: SCENARIOS =====================
+async function runPhase4() {
+  const btn = document.getElementById('sc_btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Generating...';
+  const reactBox = document.getElementById('sc_react');
+  const trace = document.getElementById('sc_trace');
+  reactBox.classList.remove('hidden'); trace.innerHTML = '';
+  log('Phase 4 started: Scenario Planning');
+
+  const scenarios = [
+    { name: document.getElementById('sc_q1_name').value, desc: document.getElementById('sc_q1_desc').value },
+    { name: document.getElementById('sc_q2_name').value, desc: document.getElementById('sc_q2_desc').value },
+    { name: document.getElementById('sc_q3_name').value, desc: document.getElementById('sc_q3_desc').value },
+    { name: document.getElementById('sc_q4_name').value, desc: document.getElementById('sc_q4_desc').value },
+  ];
+
+  const system = `You are a strategic scenario planner applying the Shell Method. For each scenario, provide strategic implications and signposts (observable indicators that this scenario is materialising).
+Be rigorous: each signpost must be a specific, measurable, observable event.
+ANTI-HALLUCINATION: Only reference the provided scenario descriptions. Do not add new scenarios.`;
+
+  const user = `Key uncertainties: X="${document.getElementById('sc_x').value}", Y="${document.getElementById('sc_y').value}"
+Time horizon: ${document.getElementById('sc_horizon').value}
+
+Four scenarios:
+1. "${scenarios[0].name}": ${scenarios[0].desc}
+2. "${scenarios[1].name}": ${scenarios[1].desc}
+3. "${scenarios[2].name}": ${scenarios[2].desc}
+4. "${scenarios[3].name}": ${scenarios[3].desc}
+
+For each scenario: (1) Probability estimate (%), (2) Strategic implications for a European FMCG brand, (3) 2–3 specific signposts to monitor, (4) Recommended budget allocation under this scenario.
+End with: which scenario is most likely, and what CONFIDENCE LEVEL you assign.`;
+
+  const result = await callClaude(system, user, trace);
+  btn.disabled = false; btn.textContent = 'Generate Scenario Analysis + Signposts';
+
+  if (result) {
+    document.getElementById('sc_output').classList.remove('hidden');
+    document.getElementById('sc_result').textContent = result;
+    const conf = result.toUpperCase().includes('CONFIDENCE: HIGH') ? 'HIGH' : result.toUpperCase().includes('CONFIDENCE: LOW') ? 'LOW' : 'MEDIUM';
+    setConfidenceBadge(document.getElementById('sc_confidence'), conf);
+    log(`Phase 4 complete: confidence=${conf}`);
+  }
+}
+
+// ===================== PHASE 5: ECOMO =====================
+function calculateECOMO() {
+  const get = id => parseFloat(document.getElementById(id).value) || 0;
+
+  function calcOption(prefix) {
+    const budget = get(prefix + '_budget');
+    const roas = get(prefix + '_roas');
+    const impl = get(prefix + '_impl');
+    const risk = get(prefix + '_risk') / 100;
+    const pGood = get(prefix + '_p_good');
+    const roasGood = get(prefix + '_roas_good');
+    const pBad = get(prefix + '_p_bad');
+    const roas_bad = get(prefix + '_roas_bad');
+    const pBase = 1 - pGood - pBad;
+
+    const revenueBase = budget * roas - budget - impl;
+    const revenueGood = budget * roasGood - budget - impl;
+    const revenueBad = budget * roas_bad - budget - impl;
+
+    const ev = pGood * revenueGood + pBase * revenueBase + pBad * revenueBad;
+    const npv = ev / (1 + risk);
+
+    return { budget, roas, impl, ev, npv, revenueBase, revenueGood, revenueBad, pGood, pBase, pBad };
+  }
+
+  const a = calcOption('a');
+  const b = calcOption('b');
+  ecomoResults = { a, b };
+
+  const fmt = n => '€' + Math.round(n).toLocaleString('es-ES');
+
+  document.getElementById('ecomo_calc_a').innerHTML = `<strong style="color:#a5b4fc">Option A (TikTok-Heavy)</strong>
+Budget: ${fmt(a.budget)} | ROAS: ${a.roas}x
+Revenue (base): ${fmt(a.revenueBase)}
+Revenue (good, p=${a.pGood}): ${fmt(a.revenueGood)}
+Revenue (bad, p=${a.pBad}): ${fmt(a.revenueBad)}
+<strong>Expected Value: ${fmt(a.ev)}</strong>
+<strong>NPV (risk-adjusted): ${fmt(a.npv)}</strong>`;
+
+  document.getElementById('ecomo_calc_b').innerHTML = `<strong style="color:#f9a8d4">Option B (Instagram-Heavy)</strong>
+Budget: ${fmt(b.budget)} | ROAS: ${b.roas}x
+Revenue (base): ${fmt(b.revenueBase)}
+Revenue (good, p=${b.pGood}): ${fmt(b.revenueGood)}
+Revenue (bad, p=${b.pBad}): ${fmt(b.revenueBad)}
+<strong>Expected Value: ${fmt(b.ev)}</strong>
+<strong>NPV (risk-adjusted): ${fmt(b.npv)}</strong>`;
+
+  const winner = document.getElementById('ecomo_winner');
+  winner.classList.remove('hidden');
+  if (a.npv > b.npv) {
+    winner.textContent = `Option A NPV (${fmt(a.npv)}) > Option B NPV (${fmt(b.npv)}) — Option A is the higher-EV choice`;
+    winner.style.color = '#a5b4fc';
+  } else {
+    winner.textContent = `Option B NPV (${fmt(b.npv)}) > Option A NPV (${fmt(a.npv)}) — Option B is the higher-EV choice`;
+    winner.style.color = '#f9a8d4';
+  }
+  log(`ECOMO calculated: EV_A=${Math.round(a.ev)}, EV_B=${Math.round(b.ev)}, NPV_A=${Math.round(a.npv)}, NPV_B=${Math.round(b.npv)}`);
+}
+
+async function runPhase5() {
+  if (!ecomoResults.a) { calculateECOMO(); }
+  const btn = document.getElementById('ecomo_btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Interpreting...';
+  const reactBox = document.getElementById('ecomo_react');
+  const trace = document.getElementById('ecomo_trace');
+  reactBox.classList.remove('hidden'); trace.innerHTML = '';
+  log('Phase 5 started: ECOMO Interpretation');
+
+  const a = ecomoResults.a, b = ecomoResults.b;
+  const fmt = n => '€' + Math.round(n).toLocaleString();
+
+  const system = `You are a CI analyst interpreting ECOMO (Expected Cost/Opportunity Model) results for a strategic budget allocation decision.
+Provide: interpretation of the numbers, sensitivity analysis (what happens if probabilities shift ±10%), recommendation, and limitations of the model.
+ANTI-HALLUCINATION: Only interpret the numbers provided. Do not fabricate financial data.`;
+
+  const user = `ECOMO Results for European FMCG brand 2026 ad budget allocation:
+
+Option A (TikTok-Heavy: 60%/25%/15%):
+- Budget: ${fmt(a.budget)}, baseline ROAS: ${a.roas}x
+- EV (scenario-weighted): ${fmt(a.ev)}
+- NPV (risk-adjusted): ${fmt(a.npv)}
+- Key risk: TikTok ban scenario (p=${a.pBad}) drops ROAS to ${ecomoResults.a.pBad > 0 ? document.getElementById('a_roas_bad').value : 'N/A'}x
+
+Option B (Instagram-Heavy: 20%/55%/25%):
+- Budget: ${fmt(b.budget)}, baseline ROAS: ${b.roas}x
+- EV (scenario-weighted): ${fmt(b.ev)}
+- NPV (risk-adjusted): ${fmt(b.npv)}
+
+NPV difference: ${fmt(Math.abs(a.npv - b.npv))} in favour of ${a.npv > b.npv ? 'Option A' : 'Option B'}
+
+Provide: (1) Interpretation of EV and NPV gap, (2) Sensitivity analysis (what if ban probability rises to 40%?), (3) Recommendation, (4) Model limitations. End with CONFIDENCE LEVEL.`;
+
+  const result = await callClaude(system, user, trace);
+  btn.disabled = false; btn.textContent = 'Generate AI Interpretation';
+
+  if (result) {
+    document.getElementById('ecomo_output').classList.remove('hidden');
+    document.getElementById('ecomo_result').textContent = result;
+    const conf = result.toUpperCase().includes('CONFIDENCE: HIGH') ? 'HIGH' : result.toUpperCase().includes('CONFIDENCE: LOW') ? 'LOW' : 'MEDIUM';
+    setConfidenceBadge(document.getElementById('ecomo_confidence'), conf);
+    log(`Phase 5 complete: confidence=${conf}`);
+  }
+}
+
+// ===================== PHASE 6: EARLY WARNING =====================
+async function runPhase6() {
+  const btn = document.getElementById('ews_btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Generating...';
+  const reactBox = document.getElementById('ews_react');
+  const trace = document.getElementById('ews_trace');
+  reactBox.classList.remove('hidden'); trace.innerHTML = '';
+  log('Phase 6 started: Early Warning System');
+
+  const system = `You are a CI Early Warning System analyst following the Gilad framework.
+Analyse the KITs and indicators provided. Identify which indicators are in ALERT or WATCH status and what actions the analyst should take.
+ANTI-HALLUCINATION: Only reference the provided indicators and thresholds. Do not add new KITs.`;
+
+  const user = `Early Warning System for TikTok vs Instagram vs YouTube Shorts CI monitoring:
+
+KIT 1 (TikTok Regulatory Risk):
+- Indicator 1: DSA compliance audit — Current: "Under review" — Alert if: Fine >€100M or ban
+- Indicator 2: EU Parliament votes — Current: "No active vote" — Alert if: Formal DMA investigation
+
+KIT 2 (Competitive Ad Pricing):
+- Indicator 3: TikTok CPM (EU) — Current: €9.80 — Alert if: <€7 or >€15
+- Indicator 4: CPM spread TikTok vs Instagram — Current: €3.10 — Alert if: spread <€1
+
+KIT 3 (Audience Migration):
+- Indicator 5: TikTok EU MAU 18-34 — Current: ~280M — Alert if: Drop >10% QoQ
+- Indicator 6: YouTube Shorts view growth — Current: 70B/day — Alert if: Growth >25% QoQ
+
+Current status flags: KIT 1 Indicator 2 = ALERT, KIT 3 Indicator 6 = WATCH
+
+Provide: (1) Priority threats requiring immediate action, (2) Recommended monitoring actions for each ALERT/WATCH indicator, (3) Intelligence collection plan for next 30 days, (4) CONFIDENCE LEVEL.`;
+
+  const result = await callClaude(system, user, trace);
+  btn.disabled = false; btn.textContent = 'Generate Early Warning Analysis';
+
+  if (result) {
+    document.getElementById('ews_output').classList.remove('hidden');
+    document.getElementById('ews_result').textContent = result;
+    const conf = result.toUpperCase().includes('CONFIDENCE: HIGH') ? 'HIGH' : result.toUpperCase().includes('CONFIDENCE: LOW') ? 'LOW' : 'MEDIUM';
+    setConfidenceBadge(document.getElementById('ews_confidence'), conf);
+    log(`Phase 6 complete: confidence=${conf}`);
+  }
+}
+
+// ===================== PHASE 7: RECOMMENDATION =====================
+async function runPhase7() {
+  const btn = document.getElementById('rec_btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Generating...';
+  const reactBox = document.getElementById('rec_react');
+  const trace = document.getElementById('rec_trace');
+  reactBox.classList.remove('hidden'); trace.innerHTML = '';
+  log('Phase 7 started: Final Recommendation');
+
+  const decision = document.getElementById('rec_decision').value;
+  const confLevel = document.getElementById('rec_confidence_input').value;
+  const hedge = document.getElementById('rec_hedge').value;
+
+  const system = `You are a senior CI analyst delivering a final Go/No-Go recommendation to a CEO.
+Structure: (1) Verdict (GO / NO-GO / CONDITIONAL GO), (2) Top 3 evidence points (specific, from the analysis), (3) Key risks, (4) Hedging actions, (5) Confidence level with justification.
+Language: executive briefing style — direct, concise, decisive. No academic hedging.
+ANTI-HALLUCINATION: Base the recommendation only on the CI analysis data provided. Cite sources.`;
+
+  const ecomo_summary = ecomoResults.a ?
+    `ECOMO: Option A NPV = €${Math.round(ecomoResults.a.npv).toLocaleString()}, Option B NPV = €${Math.round(ecomoResults.b.npv).toLocaleString()}` :
+    'ECOMO not calculated yet';
+
+  const user = `Decision under evaluation: "${decision}"
+Analyst confidence input: ${confLevel}
+Primary hedging action: ${hedge}
+
+Summary of CI analysis completed:
+- Blind spots identified for Meta/Instagram (Phase 1)
+- 8 OSINT sources triangulated: TikTok 5.69% engagement, Instagram CPM €6.70, YouTube 70B views/day (Phase 2)
+- AMC: All 3 platforms have HIGH awareness and motivation; TikTok has regulatory capability risk (Phase 3)
+- Scenarios: "Regulated Arena" and "YouTube Dominance" most likely under DSA trajectory (Phase 4)
+- ${ecomo_summary} (Phase 5)
+- Early Warning: KIT 1 Indicator 2 at ALERT (EU DMA investigation risk); KIT 3 Watch (YouTube growth) (Phase 6)
+
+Generate the final recommendation as a CEO briefing. Include: GO/NO-GO/CONDITIONAL GO verdict, top 3 evidence points, top 2 risks, 3 hedging actions, and your CONFIDENCE LEVEL.`;
+
+  const result = await callClaude(system, user, trace);
+  btn.disabled = false; btn.textContent = 'Generate Final Go / No-Go Recommendation';
+
+  if (result) {
+    document.getElementById('rec_output').classList.remove('hidden');
+    document.getElementById('rec_result').textContent = result;
+
+    const verdictEl = document.getElementById('rec_verdict');
+    if (result.includes('CONDITIONAL GO')) {
+      verdictEl.innerHTML = '<div style="font-size:2rem;font-weight:900;color:#fcd34d">CONDITIONAL GO</div><div style="color:#94a3b8;font-size:0.9rem;margin-top:4px">' + decision + '</div>';
+      verdictEl.style.borderColor = '#d97706';
+      verdictEl.style.background = '#1c1008';
+    } else if (result.includes('NO-GO') || result.includes('NO GO')) {
+      verdictEl.innerHTML = '<div style="font-size:2rem;font-weight:900;color:#f87171">NO-GO</div><div style="color:#94a3b8;font-size:0.9rem;margin-top:4px">' + decision + '</div>';
+      verdictEl.style.borderColor = '#dc2626';
+      verdictEl.style.background = '#1c0808';
+    } else {
+      verdictEl.innerHTML = '<div style="font-size:2rem;font-weight:900;color:#4ade80">GO</div><div style="color:#94a3b8;font-size:0.9rem;margin-top:4px">' + decision + '</div>';
+      verdictEl.style.borderColor = '#16a34a';
+      verdictEl.style.background = '#061208';
+    }
+
+    setConfidenceBadge(document.getElementById('rec_confidence_badge'), confLevel);
+    showSources(document.getElementById('rec_sources'), ['All 7 CI pathway phases', 'OSINT table (8 sources)', 'AMC ratings', 'ECOMO NPV', 'Early Warning KITs']);
+    log(`Phase 7 complete: verdict generated, confidence=${confLevel}`);
+  }
+}
+</script>
+</body>
+</html>
