@@ -62,7 +62,7 @@
     </div>
   </div>
 
-  <!-- API KEY (hidden — server-side via Vercel proxy) -->
+  <!-- API KEY — shared key for team use -->
   <div class="mt-4 flex gap-3 items-end flex-wrap">
     <div class="w-48">
       <label class="block text-xs text-slate-400 mb-1">Model</label>
@@ -759,6 +759,16 @@ function showPhase(n, btn) {
 }
 
 // ===================== API CALL =====================
+function getApiKey() {
+  // 1. From URL param ?key=sk-ant-...
+  const urlKey = new URLSearchParams(window.location.search).get('key');
+  if (urlKey) return urlKey;
+  // 2. From input field (fallback)
+  const inputEl = document.getElementById('apiKey');
+  if (inputEl) return inputEl.value.trim();
+  return '';
+}
+
 async function callClaude(systemPrompt, userPrompt, traceEl) {
   const model = document.getElementById('modelSelect').value;
 
@@ -774,10 +784,18 @@ async function callClaude(systemPrompt, userPrompt, traceEl) {
 
   log(`API call → model: ${model} | prompt length: ${userPrompt.length} chars`);
 
+  const key = getApiKey();
+  if (!key) { alert('No API key found. Ask your team for the shared link.'); return null; }
+
   try {
-    const res = await fetch('/api/claude', {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
       body: JSON.stringify({
         model,
         max_tokens: 1500,
@@ -826,11 +844,13 @@ function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function testConnection() {
   const status = document.getElementById('connStatus');
+  const key = getApiKey();
+  if (!key) { status.textContent = 'No key — use shared link'; status.style.color='#f87171'; return; }
   status.innerHTML = '<span class="spinner"></span>';
   try {
-    const res = await fetch('/api/claude', {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type':'application/json' },
+      headers: { 'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' },
       body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 10, messages: [{ role:'user', content:'ping' }] })
     });
     if (res.ok) { status.textContent = 'Connected ✓'; status.style.color='#4ade80'; log('Connection test: OK'); }
