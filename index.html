@@ -62,12 +62,8 @@
     </div>
   </div>
 
-  <!-- API KEY -->
+  <!-- API KEY (hidden — server-side via Vercel proxy) -->
   <div class="mt-4 flex gap-3 items-end flex-wrap">
-    <div class="flex-1 min-w-[260px]">
-      <label class="block text-xs text-slate-400 mb-1">Claude API Key (stored in browser only, never sent to our servers)</label>
-      <input type="password" id="apiKey" placeholder="sk-ant-..." />
-    </div>
     <div class="w-48">
       <label class="block text-xs text-slate-400 mb-1">Model</label>
       <select id="modelSelect">
@@ -764,8 +760,6 @@ function showPhase(n, btn) {
 
 // ===================== API CALL =====================
 async function callClaude(systemPrompt, userPrompt, traceEl) {
-  const key = document.getElementById('apiKey').value.trim();
-  if (!key) { alert('Please enter your Claude API key at the top of the page.'); return null; }
   const model = document.getElementById('modelSelect').value;
 
   // Show ReAct steps
@@ -781,14 +775,9 @@ async function callClaude(systemPrompt, userPrompt, traceEl) {
   log(`API call → model: ${model} | prompt length: ${userPrompt.length} chars`);
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('/api/claude', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model,
         max_tokens: 1500,
@@ -836,17 +825,15 @@ function showSources(el, sources) {
 function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function testConnection() {
-  const key = document.getElementById('apiKey').value.trim();
   const status = document.getElementById('connStatus');
-  if (!key) { status.textContent = 'Enter API key first'; status.style.color='#f87171'; return; }
   status.innerHTML = '<span class="spinner"></span>';
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('/api/claude', {
       method: 'POST',
-      headers: { 'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' },
+      headers: { 'Content-Type':'application/json' },
       body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 10, messages: [{ role:'user', content:'ping' }] })
     });
-    if (res.ok) { status.textContent = 'Connected'; status.style.color='#4ade80'; log('Connection test: OK'); }
+    if (res.ok) { status.textContent = 'Connected ✓'; status.style.color='#4ade80'; log('Connection test: OK'); }
     else { const e = await res.json(); status.textContent = e.error?.message || 'Error'; status.style.color='#f87171'; }
   } catch(e) { status.textContent = e.message; status.style.color='#f87171'; }
 }
